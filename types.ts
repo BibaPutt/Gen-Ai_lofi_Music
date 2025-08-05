@@ -17,3 +17,9 @@ export interface ControlChange {
 }
 
 export type PlaybackState = 'stopped' | 'playing' | 'loading' | 'paused';
+
+export interface Note {
+  note: string;
+  time: number;
+  duration: number;
+}

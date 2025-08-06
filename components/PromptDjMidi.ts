@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -14,42 +15,30 @@ import './PlayPauseButton';
 import type { PlaybackState, Prompt } from '../types';
 import { MidiDispatcher } from '../utils/MidiDispatcher';
 
-const ALL_PROMPTS = [
-  { color: '#9900ff', text: 'Bossa Nova' },
-  { color: '#5200ff', text: 'Chillwave' },
-  { color: '#ff25f6', text: 'Drum and Bass' },
-  { color: '#2af6de', text: 'Post Punk' },
-  { color: '#ffdd28', text: 'Shoegaze' },
-  { color: '#2af6de', text: 'Funk' },
-  { color: '#9900ff', text: 'Chiptune' },
-  { color: '#3dffab', text: 'Lush Strings' },
-  { color: '#d8ff3e', text: 'Sparkling Arpeggios' },
-  { color: '#d9b2ff', text: 'Staccato Rhythms' },
-  { color: '#3dffab', text: 'Punchy Kick' },
-  { color: '#ffdd28', text: 'Dubstep' },
-  { color: '#ff25f6', text: 'K Pop' },
-  { color: '#d8ff3e', text: 'Neo Soul' },
-  { color: '#5200ff', text: 'Trip Hop' },
-  { color: '#d9b2ff', text: 'Thrash' },
-  { color: '#ff6347', text: '80s Synth Pop' },
-  { color: '#4682b4', text: 'Ambient Textures' },
-  { color: '#32cd32', text: 'Reggae' },
-  { color: '#dc143c', text: 'Heavy Metal' },
-  { color: '#c71585', text: 'Orchestral' },
-  { color: '#ffd700', text: 'Jazz Piano' },
+// A curated, static list of 16 prompts for creating energetic, phonk-style lo-fi.
+const LOFI_PROMPTS = [
+  // Row 1: Beats
+  { color: '#FF4500', text: 'Hard Phonk Beat' },
+  { color: '#FF4500', text: 'Driving House Beat' },
+  { color: '#FF6347', text: 'Classic Cowbell Loop' },
+  { color: '#FF6347', text: 'Fast Breakbeat' },
+  // Row 2: Bass & Harmony
+  { color: '#9932CC', text: 'Aggressive Reese Bass' },
+  { color: '#9932CC', text: 'Heavy 808 Bassline' },
+  { color: '#00CED1', text: 'Muffled Epic Pad' },
+  { color: '#00CED1', text: 'Sidechained Synth Pad' },
+  // Row 3: Melody & Samples
+  { color: '#FFD700', text: 'Nostalgic Anime Vocal Chop' },
+  { color: '#FF1493', text: 'Distorted Synth Lead' },
+  { color: '#FFD700', text: 'Gated Reverb Melody' },
+  { color: '#FF1493', text: 'Plucked Koto Riff' },
+  // Row 4: Textures & FX
+  { color: '#696969', text: 'Vinyl Scratch FX' },
+  { color: '#696969', text: 'Tape Stop Effect' },
+  { color: '#A9A9A9', text: 'Bitcrushed Noise' },
+  { color: '#A9A9A9', text: 'Reverb Drenched Atmosphere' },
 ];
 
-const PROMPTS_BY_NAME = new Map(ALL_PROMPTS.map(p => [p.text, p]));
-
-const GENRES: Record<string, string[]> = {
-  'Lofi': ['Chillwave', 'Trip Hop', 'Jazz Piano', 'Neo Soul', 'Bossa Nova'],
-  'HipHop': ['Trip Hop', 'Funk', 'Neo Soul', 'Punchy Kick', 'Reggae'],
-  'Ambient': ['Ambient Textures', 'Lush Strings', 'Chillwave', 'Orchestral'],
-  'Electronic': ['Chillwave', 'Drum and Bass', 'Dubstep', 'Chiptune', 'Trip Hop', 'Sparkling Arpeggios', '80s Synth Pop', 'Ambient Textures'],
-  'Rock/Alternative': ['Post Punk', 'Shoegaze', 'Thrash', 'Funk', 'Heavy Metal'],
-  'Pop/World': ['K Pop', 'Bossa Nova', 'Neo Soul', 'Reggae'],
-  'Elements': ['Lush Strings', 'Staccato Rhythms', 'Punchy Kick', 'Jazz Piano', 'Orchestral'],
-};
 
 /** The main application shell. */
 @customElement('prompt-dj-midi')
@@ -62,83 +51,8 @@ export class PromptDjMidi extends LitElement {
       box-sizing: border-box;
       position: relative;
       background: #111;
-      --sidebar-width: 250px;
       --top-bar-height: 80px;
       --brand-font: 'Google Sans', sans-serif;
-    }
-
-    #sidebar-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      z-index: 1000;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease-in-out;
-    }
-    :host([sidebar-open]) #sidebar-overlay {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    #sidebar {
-      width: var(--sidebar-width);
-      height: 100%;
-      background: #1a1a1a;
-      border-right: 1px solid #333;
-      padding: 20px;
-      box-sizing: border-box;
-      flex-shrink: 0;
-      transition: transform 0.3s ease-in-out;
-      z-index: 1001;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      position: fixed;
-      top: 0;
-      left: 0;
-      transform: translateX(-100%);
-    }
-    :host([sidebar-open]) #sidebar {
-      transform: translateX(0);
-    }
-    
-    #sidebar h2 {
-      font-family: var(--brand-font);
-      color: #fff;
-      margin: 0 0 10px 0;
-      font-size: 24px;
-    }
-    .mood-buttons {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      overflow-y: auto;
-    }
-    .mood-buttons button {
-      width: 100%;
-      padding: 12px;
-      font-family: var(--brand-font);
-      font-size: 16px;
-      font-weight: 500;
-      background: #333;
-      color: #eee;
-      border: 1px solid #444;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.2s, color 0.2s;
-      text-align: left;
-    }
-    .mood-buttons button:hover {
-      background: #4a4a4a;
-    }
-    .mood-buttons button.active {
-      background: #fff;
-      color: #000;
-      font-weight: 700;
     }
 
     #main-content {
@@ -149,7 +63,7 @@ export class PromptDjMidi extends LitElement {
       flex-direction: column;
       align-items: center;
       position: relative;
-      overflow: hidden;
+      overflow-y: auto;
     }
     #background {
       will-change: background-image;
@@ -161,44 +75,17 @@ export class PromptDjMidi extends LitElement {
 
     #top-bar {
       width: 100%;
-      height: var(--top-bar-height);
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 0 20px;
+      justify-content: center;
+      padding: 15px 20px;
       box-sizing: border-box;
       flex-shrink: 0;
       z-index: 100;
       gap: 20px;
+      flex-wrap: wrap;
     }
-    .top-bar-section {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-    }
-    .menu-button {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: 1px solid #555;
-      cursor: pointer;
-      padding: 0;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      transition: background 0.2s;
-    }
-    .menu-button:hover {
-      background: #333;
-    }
-    .menu-button svg {
-      width: 20px;
-      height: 20px;
-      stroke: #fff;
-    }
-    
+
     .randomize-button {
        font-family: var(--brand-font);
       font-weight: 600;
@@ -211,6 +98,10 @@ export class PromptDjMidi extends LitElement {
       padding: 10px 20px;
       border-radius: 20px;
       white-space: nowrap;
+      transition: background-color 0.2s;
+    }
+    .randomize-button:hover {
+      background: #eee;
     }
 
     .auto-pilot {
@@ -233,7 +124,7 @@ export class PromptDjMidi extends LitElement {
       white-space: nowrap;
       -webkit-font-smoothing: antialiased;
       user-select: none;
-      transition: background-color .2s, color .2s, border-color .2s;
+      transition: background-color .2s, color .2s;
       border: 1.5px solid transparent;
       color: #eee;
       background: #282828;
@@ -294,89 +185,77 @@ export class PromptDjMidi extends LitElement {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding-bottom: var(--top-bar-height);
+      padding: 2rem 0 4rem 0;
     }
 
     #grid {
-      width: 100%;
-      max-width: 70vmin;
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 2.5vmin;
+      width: 90%;
+      max-width: 800px;
     }
 
     play-pause-button {
-      width: 14vmin;
-      margin-top: 4vmin;
+      width: 140px;
+      height: 140px;
+      margin-top: 40px;
+      flex-shrink: 0;
     }
     
-    .sidebar-controls {
+    .midi-controls {
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: auto;
+      align-items: center;
+      gap: 15px;
     }
 
     .midi-button {
-      font-weight: 500;
+      font-family: var(--brand-font);
+      font-weight: 600;
       cursor: pointer;
-      color: #fff;
-      background: #333;
-      border: 1px solid #444;
-      border-radius: 8px;
       -webkit-font-smoothing: antialiased;
-      padding: 10px 12px;
-      width: 100%;
+      border: none;
+      user-select: none;
+      padding: 10px 20px;
+      border-radius: 20px;
+      white-space: nowrap;
+      color: #000;
+      background: #fff;
+      transition: background-color 0.2s;
     }
     .midi-button.active {
-      background-color: #fff;
-      color: #000;
+      background-color: #aaa;
     }
 
     select {
       font: inherit;
-      padding: 8px;
+      padding: 8px 12px;
       background: #333;
       color: #fff;
       border-radius: 8px;
       border: 1px solid #444;
       outline: none;
       cursor: pointer;
-      width: 100%;
     }
 
     /* Responsive Design */
-    @media (max-width: 950px) {
-      .auto-pilot {
-        gap: 8px;
-      }
-      .auto-pilot input[type=range] {
-        width: 80px;
-      }
-    }
     @media (max-width: 768px) {
-      :host {
-        --top-bar-height: auto;
+      #grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5vmin;
+        width: 90vw;
       }
-      #top-bar {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 15px;
-        gap: 15px;
+      play-pause-button {
+          width: 120px;
+          height: 120px;
+          margin-top: 30px;
       }
-      .top-bar-section.right {
-        width: 100%;
-        justify-content: space-between;
-      }
-      #grid { max-width: 85vmin; }
-      play-pause-button { margin-top: 5vmin; width: 18vmin;}
     }
     
-    @media (max-width: 480px) {
-      .top-bar-section.right {
+    @media (max-width: 600px) {
+      #top-bar {
         flex-direction: column;
         align-items: stretch;
-        gap: 10px;
       }
       .auto-pilot {
         justify-content: space-between;
@@ -384,19 +263,24 @@ export class PromptDjMidi extends LitElement {
       .auto-pilot input[type=range] {
         flex-grow: 1;
       }
+      .midi-controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      select {
+        text-align: center;
+      }
     }
   `;
 
   public prompts: Map<string, Prompt>;
   private midiDispatcher: MidiDispatcher;
 
-  @property({ type: Boolean, reflect: true, attribute: 'sidebar-open' }) private sidebarOpen = false;
   @property({ type: Boolean }) private showMidi = false;
   @property({ type: String }) public playbackState: PlaybackState = 'stopped';
   @state() public audioLevel = 0;
   @state() private midiInputIds: string[] = [];
   @state() private activeMidiInputId: string | null = null;
-  @state() private _activeGenre = 'Initial';
   @state() private _autoPilotOn = false;
   @state() private _autoPilotInterval = 60; // seconds
 
@@ -412,86 +296,76 @@ export class PromptDjMidi extends LitElement {
   }
 
   private _buildInitialPrompts() {
-    // Pick 3 random prompts to start at weight = 1
-    const startOn = [...ALL_PROMPTS]
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 3);
-
     const prompts = new Map<string, Prompt>();
-    const promptPool = [...ALL_PROMPTS].sort(() => Math.random() - 0.5);
-
     for (let i = 0; i < 16; i++) {
-      const promptId = `prompt-${i}`;
-      const promptData = promptPool[i];
-      const { text, color } = promptData;
-      prompts.set(promptId, {
-        promptId,
-        text,
-        weight: startOn.includes(promptData) ? 1 : 0,
-        cc: i,
-        color,
-      });
+        const promptId = `prompt-${i}`;
+        const promptData = LOFI_PROMPTS[i];
+        const { text, color } = promptData;
+        
+        // Set an energetic beat, bass, and sample to be active initially.
+        const initialActive = i === 0 || i === 5 || i === 9;
+
+        prompts.set(promptId, {
+            promptId,
+            text,
+            weight: initialActive ? 1 : 0,
+            cc: i,
+            color,
+        });
     }
     return prompts;
   }
-
-  private _getPromptsForGenre(genre: string) {
-    const genrePrompts = GENRES[genre]
-      .map(name => PROMPTS_BY_NAME.get(name)!)
-      .filter(Boolean);
-    
-    const otherPrompts = ALL_PROMPTS
-      .filter(p => !GENRES[genre].includes(p.text))
-      .sort(() => 0.5 - Math.random());
-    
-    return [...genrePrompts, ...otherPrompts].slice(0, 16);
-  }
-  
-  private _setPrompts(newPromptData: {text: string, color: string}[], options: { preserveWeights?: boolean, activeCount?: number } = {}) {
-    const { preserveWeights = false, activeCount = 3 } = options;
-    const newPrompts = new Map<string, Prompt>();
-    const currentPrompts = preserveWeights ? [...this.prompts.values()] : undefined;
-    
-    // Select random prompts to be active only when not preserving weights
-    const startOn = preserveWeights ? [] : [...newPromptData].sort(() => Math.random() - 0.5).slice(0, activeCount);
-
-    for (let i = 0; i < 16; i++) {
-      // Use existing promptId and cc if we're preserving state
-      const oldPrompt = currentPrompts?.[i];
-      const promptId = oldPrompt?.promptId ?? `prompt-${i}`;
-      const cc = oldPrompt?.cc ?? i;
-
-      const promptData = newPromptData[i % newPromptData.length];
-
-      newPrompts.set(promptId, {
-        promptId,
-        text: promptData.text,
-        color: promptData.color,
-        // Preserve weight if requested, otherwise reset based on `startOn`
-        weight: oldPrompt ? oldPrompt.weight : (startOn.includes(promptData) ? 1 : 0),
-        cc,
-      });
-    }
-    this.prompts = newPrompts;
-    this._dispatchPromptsChanged();
-  }
   
   private _randomizePrompts() {
-    const randomPrompts = [...ALL_PROMPTS].sort(() => Math.random() - 0.5).slice(0, 16);
-    this._setPrompts(randomPrompts, { activeCount: 3 });
-    this._activeGenre = '';
-  }
+    const pickRandom = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+    
+    const prompts = [...this.prompts.values()];
 
-  private _handleGenreSelect(e: MouseEvent) {
-    const button = e.currentTarget as HTMLButtonElement;
-    const genre = button.dataset.genre!;
-    this._activeGenre = genre;
-    const newPromptData = this._getPromptsForGenre(genre);
-    this._setPrompts(newPromptData, { preserveWeights: true });
+    // Categories are based on their static positions in the 16-slot grid
+    const beats = prompts.slice(0, 4);
+    const bass = prompts.slice(4, 6);
+    const harmony = prompts.slice(6, 8);
+    const melody = prompts.slice(8, 12);
+    const textures = prompts.slice(12, 16);
+    
+    const newWeights = new Map<string, number>();
+
+    // Set all to 0 initially
+    for (const p of prompts) {
+      newWeights.set(p.promptId, 0);
+    }
+
+    // --- Create a coherent Lo-fi track ---
+    // Pick one beat
+    newWeights.set(pickRandom(beats).promptId, 1 + Math.random() * 0.2);
+    // Pick one bass
+    newWeights.set(pickRandom(bass).promptId, 1 + Math.random() * 0.2);
+    // 50% chance of a harmony element
+    if (Math.random() > 0.5) {
+      newWeights.set(pickRandom(harmony).promptId, 1 + Math.random() * 0.2);
+    }
+    // 70% chance of a melody/sample
+    if (Math.random() > 0.3) {
+      newWeights.set(pickRandom(melody).promptId, 0.8 + Math.random() * 0.4);
+    }
+    // Pick one or two textures/fx
+    const texture1 = pickRandom(textures);
+    newWeights.set(texture1.promptId, 0.7 + Math.random() * 0.4);
+    if (Math.random() > 0.6) {
+      const texture2 = pickRandom(textures.filter(t => t.promptId !== texture1.promptId));
+      if(texture2) newWeights.set(texture2.promptId, 0.7 + Math.random() * 0.4);
+    }
+    
+    // Apply new weights to the main prompts map
+    this.prompts.forEach(p => {
+      p.weight = newWeights.get(p.promptId) ?? 0;
+    });
+
+    this._dispatchPromptsChanged();
   }
 
   private _runAutoPilot() {
-    if (!this._autoPilotOn) return; // Stop if turned off
+    if (!this._autoPilotOn) return;
     this._randomizePrompts();
     this._autoPilotTimerId = window.setTimeout(() => this._runAutoPilot(), this._autoPilotInterval * 1000);
   }
@@ -499,10 +373,8 @@ export class PromptDjMidi extends LitElement {
   private _toggleAutoPilot() {
       this._autoPilotOn = !this._autoPilotOn;
       if (this._autoPilotOn) {
-          // When turning on, randomize immediately and start the timer loop.
           this._runAutoPilot();
       } else {
-          // When turning off, just clear the timer.
           if (this._autoPilotTimerId) clearTimeout(this._autoPilotTimerId);
           this._autoPilotTimerId = null;
       }
@@ -512,8 +384,6 @@ export class PromptDjMidi extends LitElement {
       const input = e.target as HTMLInputElement;
       this._autoPilotInterval = Number(input.value);
       if (this._autoPilotOn) {
-          // If it's on, clear the old timer and set a new one.
-          // This "restarts" the wait for the next randomization without running one now.
           if (this._autoPilotTimerId) clearTimeout(this._autoPilotTimerId);
           this._autoPilotTimerId = window.setTimeout(() => this._runAutoPilot(), this._autoPilotInterval * 1000);
       }
@@ -585,66 +455,35 @@ export class PromptDjMidi extends LitElement {
     this.filteredPrompts = new Set([...this.filteredPrompts, prompt]);
   }
 
-  private renderMenuIcon() {
-    return svg`<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="3" y1="12" x2="21" y2="12"></line>
-      <line x1="3" y1="6" x2="21" y2="6"></line>
-      <line x1="3" y1="18" x2="21" y2="18"></line>
-    </svg>`;
-  }
-
   override render() {
     const bg = styleMap({ backgroundImage: this.makeBackground() });
     
     return html`
-      <div id="sidebar-overlay" @click=${() => this.sidebarOpen = false}></div>
-      <aside id="sidebar">
-        <h2>Genres</h2>
-        <div class="mood-buttons">
-          ${Object.keys(GENRES).map(genre => html`
-            <button 
-              class=${classMap({ active: this._activeGenre === genre })}
-              data-genre=${genre}
-              @click=${this._handleGenreSelect}>
-              ${genre}
-            </button>
-          `)}
-        </div>
-
-        <div class="sidebar-controls">
-          <button
-            @click=${this._toggleShowMidi}
-            class=${classMap({'midi-button': true, active: this.showMidi})}
-            >MIDI Controls</button>
-          <select
-            @change=${this.handleMidiInputChange}
-            .value=${this.activeMidiInputId || ''}
-            style=${this.showMidi ? '' : 'display: none'}>
-            ${this.midiInputIds.length > 0
-              ? this.midiInputIds.map(id => html`<option value=${id}>${this.midiDispatcher.getDeviceName(id)}</option>`)
-              : html`<option value="">No devices found</option>`
-            }
-          </select>
-        </div>
-      </aside>
-
       <main id="main-content">
         <div id="background" style=${bg}></div>
         <div id="top-bar">
-          <div class="top-bar-section left">
-            <button class="menu-button" @click=${() => this.sidebarOpen = !this.sidebarOpen} aria-label="Toggle Menu">
-              ${this.renderMenuIcon()}
-            </button>
+          <div class="auto-pilot">
+            <button 
+              class=${classMap({'auto-pilot-toggle': true, active: this._autoPilotOn })}
+              @click=${this._toggleAutoPilot}>Auto-Pilot</button>
+            <input type="range" min="30" max="120" .value=${this._autoPilotInterval} @input=${this._handleIntervalChange} />
+            <span>${this._autoPilotInterval}s</span>
           </div>
-          <div class="top-bar-section right">
-             <div class="auto-pilot">
-              <button 
-                class=${classMap({'auto-pilot-toggle': true, active: this._autoPilotOn })}
-                @click=${this._toggleAutoPilot}>Auto-Pilot</button>
-              <input type="range" min="30" max="120" .value=${this._autoPilotInterval} @input=${this._handleIntervalChange} />
-              <span>${this._autoPilotInterval}s</span>
-            </div>
-            <button class="randomize-button" @click=${this._randomizePrompts}>Randomize</button>
+          <button class="randomize-button" @click=${this._randomizePrompts}>Randomize</button>
+          <div class="midi-controls">
+            <button
+              @click=${this._toggleShowMidi}
+              class=${classMap({'midi-button': true, active: this.showMidi})}
+            >MIDI</button>
+            <select
+              @change=${this.handleMidiInputChange}
+              .value=${this.activeMidiInputId || ''}
+              style=${!this.showMidi ? 'display: none' : ''}>
+              ${this.midiInputIds.length > 0
+                ? this.midiInputIds.map(id => html`<option value=${id}>${this.midiDispatcher.getDeviceName(id)}</option>`)
+                : html`<option value="">No devices found</option>`
+              }
+            </select>
           </div>
         </div>
         <div id="content-area">

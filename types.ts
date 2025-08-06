@@ -6,14 +6,13 @@ export interface Prompt {
   readonly promptId: string;
   text: string;
   weight: number;
-  cc: number;
   color: string;
 }
 
+export type PlaybackState = 'stopped' | 'playing' | 'loading' | 'paused';
+
 export interface ControlChange {
-  channel: number;
   cc: number;
   value: number;
+  channel: number;
 }
-
-export type PlaybackState = 'stopped' | 'playing' | 'loading' | 'paused';

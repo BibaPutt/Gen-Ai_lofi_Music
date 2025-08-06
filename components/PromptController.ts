@@ -4,13 +4,11 @@
 */
 import { css, html, LitElement } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 import './WeightKnob';
 import type { WeightKnob } from './WeightKnob';
 
-import type { MidiDispatcher } from '../utils/MidiDispatcher';
-import type { Prompt, ControlChange } from '../types';
+import type { Prompt } from '../types';
 
 /** A single prompt input associated with a MIDI CC. */
 @customElement('prompt-controller')
@@ -26,27 +24,6 @@ export class PromptController extends LitElement {
     weight-knob {
       width: 70%;
       flex-shrink: 0;
-    }
-    #midi {
-      font-family: monospace;
-      text-align: center;
-      font-size: 1.5vmin;
-      border: 0.2vmin solid #fff;
-      border-radius: 0.5vmin;
-      padding: 2px 5px;
-      color: #fff;
-      background: #0006;
-      cursor: pointer;
-      visibility: hidden;
-      user-select: none;
-      margin-top: 0.75vmin;
-      .learn-mode & {
-        color: orange;
-        border-color: orange;
-      }
-      .show-cc & {
-        visibility: visible;
-      }
     }
     #text {
       font-weight: 500;
@@ -93,39 +70,12 @@ export class PromptController extends LitElement {
   @property({ type: Number }) weight = 0;
   @property({ type: String }) color = '';
   @property({ type: Boolean, reflect: true }) filtered = false;
-
-  @property({ type: Number }) cc = 0;
-  @property({ type: Number }) channel = 0; // Not currently used
-
-  @property({ type: Boolean }) learnMode = false;
-  @property({ type: Boolean }) showCC = false;
+  @property({ type: Number }) audioLevel = 0;
 
   @query('weight-knob') private weightInput!: WeightKnob;
   @query('#text') private textInput!: HTMLInputElement;
 
-  @property({ type: Object })
-  midiDispatcher: MidiDispatcher | null = null;
-
-  @property({ type: Number }) audioLevel = 0;
-
   private lastValidText!: string;
-
-  override connectedCallback() {
-    super.connectedCallback();
-    this.midiDispatcher?.addEventListener('cc-message', (e: Event) => {
-      const customEvent = e as CustomEvent<ControlChange>;
-      const { channel, cc, value } = customEvent.detail;
-      if (this.learnMode) {
-        this.cc = cc;
-        this.channel = channel;
-        this.learnMode = false;
-        this.dispatchPromptChange();
-      } else if (cc === this.cc) {
-        this.weight = (value / 127) * 2;
-        this.dispatchPromptChange();
-      }
-    });
-  }
 
   override firstUpdated() {
     // contenteditable is applied to textInput so we can "shrink-wrap" to text width
@@ -138,9 +88,6 @@ export class PromptController extends LitElement {
   }
 
   update(changedProperties: Map<string, unknown>) {
-    if (changedProperties.has('showCC') && !this.showCC) {
-      this.learnMode = false;
-    }
     if (changedProperties.has('text') && this.textInput) {
       this.textInput.textContent = this.text;
     }
@@ -154,7 +101,6 @@ export class PromptController extends LitElement {
           promptId: this.promptId,
           text: this.text,
           weight: this.weight,
-          cc: this.cc,
           color: this.color,
         },
       }),
@@ -206,17 +152,8 @@ export class PromptController extends LitElement {
     this.dispatchPromptChange();
   }
 
-  private toggleLearnMode() {
-    this.learnMode = !this.learnMode;
-  }
-
   override render() {
-    const classes = classMap({
-      'prompt': true,
-      'learn-mode': this.learnMode,
-      'show-cc': this.showCC,
-    });
-    return html`<div class=${classes}>
+    return html`<div class="prompt">
       <weight-knob
         id="weight"
         value=${this.weight}
@@ -229,9 +166,6 @@ export class PromptController extends LitElement {
         @focus=${this.onFocus}
         @keydown=${this.onKeyDown}
         @blur=${this.updateText}></span>
-      <div id="midi" @click=${this.toggleLearnMode}>
-        ${this.learnMode ? 'Learn' : `CC:${this.cc}`}
-      </div>
     </div>`;
   }
 }
@@ -240,4 +174,4 @@ declare global {
   interface HTMLElementTagNameMap {
     'prompt-controller': PromptController;
   }
-} 
+}

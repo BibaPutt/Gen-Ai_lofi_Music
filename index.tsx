@@ -11,18 +11,22 @@ import { ToastMessage } from './components/ToastMessage';
 import { LiveMusicHelper } from './utils/LiveMusicHelper';
 import { AudioAnalyser } from './utils/AudioAnalyser';
 
-// The API key is loaded from environment variables.
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY, apiVersion: 'v1alpha' });
+// Create two separate clients. One for the experimental live music API,
+// and one for the standard generative model API. This prevents potential
+// versioning conflicts that can cause WebSocket errors.
+const liveAi = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY, apiVersion: 'v1alpha' });
+const generativeAi = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 const model = 'lyria-realtime-exp';
 
 function main() {
   const app = new PromptDjMidi();
+  app.generativeAi = generativeAi; // Pass standard AI client to the main component
   document.body.appendChild(app);
 
   const toastMessage = new ToastMessage();
   document.body.appendChild(toastMessage);
 
-  const liveMusicHelper = new LiveMusicHelper(ai, model);
+  const liveMusicHelper = new LiveMusicHelper(liveAi, model); // Use dedicated live music client
   liveMusicHelper.setWeightedPrompts(app.prompts);
 
   const audioAnalyser = new AudioAnalyser(liveMusicHelper.audioContext);

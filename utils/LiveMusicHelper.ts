@@ -177,3 +177,4 @@ export class LiveMusicHelper extends EventTarget {
         return this.stop();
     }
   }
+}

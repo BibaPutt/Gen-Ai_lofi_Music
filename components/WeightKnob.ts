@@ -3,15 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { css, html, LitElement } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
-
-/** Maps prompt weight to halo size. */
-const MIN_HALO_SCALE = 1;
-const MAX_HALO_SCALE = 2;
-
-/** The amount of scale to add to the halo based on audio level. */
-const HALO_LEVEL_MODIFIER = 1;
 
 /** A knob for adjusting and visualizing prompt weight. */
 @customElement('weight-knob')
@@ -32,27 +25,12 @@ export class WeightKnob extends LitElement {
       width: 100%;
       height: 100%;
     }
-    #halo {
-      position: absolute;
-      z-index: -1;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      mix-blend-mode: lighten;
-      will-change: transform;
-      transition: transform 0.1s linear;
-    }
   `;
 
   @property({ type: Number }) value = 0;
   @property({ type: String }) color = '#000';
   @property({ type: Number }) audioLevel = 0;
 
-  @query('#halo') private haloElement!: HTMLDivElement;
-
-  private rafId: number | null = null;
   private dragStartPos = 0;
   private dragStartValue = 0;
 
@@ -62,36 +40,6 @@ export class WeightKnob extends LitElement {
     this.handlePointerMove = this.handlePointerMove.bind(this);
     this.handlePointerUp = this.handlePointerUp.bind(this);
   }
-
-  override connectedCallback() {
-    super.connectedCallback();
-    this.animateHalo();
-  }
-
-  override disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
-    }
-  }
-
-  private animateHalo = () => {
-    if (this.haloElement) {
-      const time = Date.now() * 0.0015; // Speed of the pulse
-      const pulse = Math.sin(time) * 0.05; // Amplitude of the pulse
-
-      let baseScale = (this.value / 2) * (MAX_HALO_SCALE - MIN_HALO_SCALE);
-      baseScale += MIN_HALO_SCALE;
-
-      const audioScale = this.audioLevel * HALO_LEVEL_MODIFIER;
-
-      const finalScale = this.value > 0 ? baseScale + audioScale + pulse : 0;
-
-      this.haloElement.style.transform = `scale(${finalScale})`;
-    }
-
-    this.rafId = requestAnimationFrame(this.animateHalo);
-  };
 
   private handlePointerDown(e: PointerEvent) {
     e.preventDefault();
@@ -151,13 +99,7 @@ export class WeightKnob extends LitElement {
       transform: `translate(40px, 40px) rotate(${rot}rad)`,
     });
 
-    const haloStyle = styleMap({
-      display: this.value > 0 ? 'block' : 'none',
-      background: this.color,
-    });
-
     return html`
-      <div id="halo" style=${haloStyle}></div>
       <!-- Static SVG elements -->
       ${this.renderStaticSvg()}
       <!-- SVG elements that move, separated to limit redraws -->

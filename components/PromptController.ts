@@ -27,8 +27,8 @@ export class PromptController extends LitElement {
     }
     #text {
       font-weight: 500;
-      font-size: 1.8vmin;
-      max-width: 17vmin;
+      font-size: 1.5vmin;
+      max-width: 15vmin;
       min-width: 2vmin;
       padding: 0.1em 0.3em;
       margin-top: 0.5vmin;
@@ -40,10 +40,15 @@ export class PromptController extends LitElement {
       border: none;
       outline: none;
       -webkit-font-smoothing: antialiased;
-      background: #000;
-      color: #fff;
+      background: rgba(0, 0, 0, 0.4);
+      color: #ddd;
+      transition: background 0.2s, color 0.2s;
       &:not(:focus) {
         text-overflow: ellipsis;
+      }
+      &:focus {
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
       }
     }
     :host([filtered]) {
@@ -52,6 +57,7 @@ export class PromptController extends LitElement {
       }
       #text {
         background: #da2000;
+        color: #fff;
         z-index: 1;
       }
     }

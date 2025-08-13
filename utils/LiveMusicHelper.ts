@@ -144,14 +144,14 @@ export class LiveMusicHelper extends EventTarget {
     this.outputNode.connect(this.audioContext.destination);
     if (this.extraDestination) this.outputNode.connect(this.extraDestination);
     this.outputNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-    this.outputNode.gain.linearRampToValueAtTime(1, this.audioContext.currentTime + 0.1);
+    this.outputNode.gain.linearRampToValueAtTime(1, this.audioContext.currentTime + 0.5);
   }
 
   public pause() {
     if (this.session) this.session.pause();
     this.setPlaybackState('paused');
-    this.outputNode.gain.setValueAtTime(1, this.audioContext.currentTime);
-    this.outputNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.1);
+    this.outputNode.gain.setValueAtTime(this.outputNode.gain.value, this.audioContext.currentTime);
+    this.outputNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 1.5);
     this.nextStartTime = 0;
     this.outputNode = this.audioContext.createGain();
   }
@@ -177,5 +177,3 @@ export class LiveMusicHelper extends EventTarget {
         return this.stop();
     }
   }
-
-}

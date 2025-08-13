@@ -1,4 +1,4 @@
-/**
+rbe/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
@@ -599,7 +599,7 @@ export class PromptDjMidi extends LitElement {
 
       const response = await this.generativeAi.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: `Analyze the song or vibe: "${this.songQuery}"`,
+        contents: `Describe a vibe or mood "${this.songQuery}"`,
         config: {
           systemInstruction,
           responseMimeType: 'application/json',

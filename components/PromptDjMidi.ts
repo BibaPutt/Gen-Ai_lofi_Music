@@ -8,75 +8,107 @@ import { styleMap } from 'lit/directives/style-map.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { GoogleGenAI, Type } from '@google/genai';
 
-import { throttle } from '../utils/throttle';
+import { debounce } from '../utils/throttle';
 
 import './PromptController';
 import './PlayPauseButton';
 import type { PlaybackState, Prompt } from '../types';
 
-// A curated, static list of 16 prompts for creating energetic, phonk-style lo-fi.
+// A curated, static list of 16 prompts for creating classic, chill lo-fi.
 const LOFI_PROMPTS = [
-  // Row 1: Beats
-  { color: '#FF4500', text: 'Hard Phonk Beat' },
-  { color: '#FF4500', text: 'Driving House Beat' },
-  { color: '#FF6347', text: 'Classic Cowbell Loop' },
-  { color: '#FF6347', text: 'Fast Breakbeat' },
+  // Row 1: Beats - Blue
+  { color: '#5D9CEC', text: 'Classic Lofi Beat' },
+  { color: '#5D9CEC', text: 'Jazzy Boom Bap' },
+  { color: '#5D9CEC', text: 'Relaxed Hip Hop drums' },
+  { color: '#5D9CEC', text: 'Light trap beat' },
   // Row 2: Bass & Harmony
-  { color: '#9932CC', text: 'Aggressive Reese Bass' },
-  { color: '#9932CC', text: 'Heavy 808 Bassline' },
-  { color: '#00CED1', text: 'Muffled Epic Pad' },
-  { color: '#00CED1', text: 'Sidechained Synth Pad' },
-  // Row 3: Melody & Samples
-  { color: '#FFD700', text: 'Nostalgic Anime Vocal Chop' },
-  { color: '#FF1493', text: 'Distorted Synth Lead' },
-  { color: '#FFD700', text: 'Gated Reverb Melody' },
-  { color: '#FF1493', text: 'Plucked Koto Riff' },
-  // Row 4: Textures & FX
-  { color: '#696969', text: 'Vinyl Scratch FX' },
-  { color: '#696969', text: 'Tape Stop Effect' },
-  { color: '#A9A9A9', text: 'Bitcrushed Noise' },
-  { color: '#A9A9A9', text: 'Reverb Drenched Atmosphere' },
+  { color: '#F7DC6F', text: 'Warm Sub Bass' }, // Bass - Yellow
+  { color: '#F7DC6F', text: 'Upright Bass Riff' }, // Bass - Yellow
+  { color: '#BB8FCE', text: 'Mellow Rhodes Chords' }, // Harmony - Purple
+  { color: '#BB8FCE', text: 'Dreamy Synth Pad' }, // Harmony - Purple
+  // Row 3: Melody - Orange
+  { color: '#E59866', text: 'Reverb Vocal Chop' },
+  { color: '#E59866', text: 'Jazzy Piano Melody' },
+  { color: '#E59866', text: 'Clean Electric Guitar' },
+  { color: '#E59866', text: 'Sad Saxophone hook' },
+  // Row 4: Textures & FX - Grey
+  { color: '#BFC9CA', text: 'Soft Vinyl Crackle' },
+  { color: '#BFC9CA', text: 'Gentle Rain' },
+  { color: '#BFC9CA', text: 'Cassette Tape Hiss' },
+  { color: '#BFC9CA', text: 'Page Turning Foley' },
 ];
 
 const CATEGORY_MAPPING: Record<string, { color: string, slots: number[] }> = {
-    beat: { color: '#FF4500', slots: [0, 1, 2, 3] },
-    bass: { color: '#9932CC', slots: [4, 5] },
-    harmony: { color: '#00CED1', slots: [6, 7] },
-    melody: { color: '#FFD700', slots: [8, 9, 10, 11] },
-    texture: { color: '#696969', slots: [12, 13, 14, 15] },
+    beat: { color: '#5D9CEC', slots: [0, 1, 2, 3] },
+    bass: { color: '#F7DC6F', slots: [4, 5] },
+    harmony: { color: '#BB8FCE', slots: [6, 7] },
+    melody: { color: '#E59866', slots: [8, 9, 10, 11] },
+    texture: { color: '#BFC9CA', slots: [12, 13, 14, 15] },
 };
 
+type Mood = 'chill' | 'happy' | 'sad' | 'intense' | 'ambient';
+
+const MOOD_PALETTES: Record<Mood, { bg: string, colors: string[] }> = {
+  chill: { bg: '#111111', colors: ['#4A90E2', '#50E3C2', '#B8E986', '#7DD3FC'] },
+  happy: { bg: '#332211', colors: ['#FFC300', '#FF5733', '#FF8E53', '#F9A825', '#FFEB3B'] },
+  sad: { bg: '#1A1D2D', colors: ['#3B4A6B', '#5C6E91', '#2F3B52', '#485675', '#607D8B'] },
+  intense: { bg: '#2C0B0B', colors: ['#8E1A1A', '#FF4D4D', '#D90000', '#B71C1C', '#F50057'] },
+  ambient: { bg: '#2E3D40', colors: ['#A8DADC', '#C5E1A5', '#E0F7FA', '#B2DFDB', '#80CBC4'] },
+};
+
+interface BackgroundHalo {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  baseSize: number;
+  color: string;
+  borderRadius: string;
+}
 
 /** The main application shell. */
 @customElement('prompt-dj-midi')
 export class PromptDjMidi extends LitElement {
   static override styles = css`
     :host {
-      width: 100vw;
-      height: 100%;
+      width: 100%;
+      min-height: 100vh;
       display: flex;
       box-sizing: border-box;
       position: relative;
-      background: #111;
+      background-color: var(--bg-color, #111);
+      transition: background-color 1s ease-out;
       --brand-font: 'Google Sans', sans-serif;
     }
-
     #main-content {
       flex-grow: 1;
       width: 100%;
-      height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
       position: relative;
-      overflow-y: auto;
     }
-    #background {
-      will-change: background-image;
-      position: absolute;
-      height: 100%;
+    #halo-container {
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100%;
+      height: 100%;
+      overflow: hidden;
       z-index: 0;
+      pointer-events: none;
+    }
+    .background-halo {
+      position: absolute;
+      filter: blur(80px);
+      will-change: transform, border-radius;
+      transition:
+        transform 200ms linear,
+        border-radius 4s ease-in-out,
+        background-color 2s ease-out,
+        width 2s ease-out,
+        height 2s ease-out;
     }
 
     #top-bar {
@@ -91,6 +123,12 @@ export class PromptDjMidi extends LitElement {
       gap: 10px;
     }
     
+    #top-left-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
     #analyze-form {
       display: flex;
       gap: 10px;
@@ -123,9 +161,10 @@ export class PromptDjMidi extends LitElement {
       padding: 0;
       border-radius: 50%;
       flex-shrink: 0;
-      transition: background 0.2s, opacity .2s, transform .2s;
-      border: none;
+      transition: background 0.2s, opacity .2s, transform .2s, border-color .2s;
+      border: 2px solid #282828;
       background: #282828;
+      color: #fff;
     }
     .top-button:hover:not(:disabled) {
       background: #383838;
@@ -135,10 +174,25 @@ export class PromptDjMidi extends LitElement {
       opacity: 0.5;
       cursor: not-allowed;
     }
+    .top-button.active {
+      background: #fff;
+      color: #000;
+    }
+    .top-button.active:hover:not(:disabled) {
+      background: #eee;
+    }
+    .top-button svg {
+      width: 20px;
+      height: 20px;
+    }
+    .top-button .spinning {
+      animation: spin 1s linear infinite;
+    }
 
     .analyze-button {
       background: none;
       padding: 2px;
+      border: none;
     }
     .analyze-button svg {
       width: 100%;
@@ -152,11 +206,14 @@ export class PromptDjMidi extends LitElement {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
-    .clear-button svg {
-      width: 18px;
-      height: 18px;
+    .reset-button svg {
+      width: 20px;
+      height: 20px;
       stroke: #aaa;
-      stroke-width: 2.5;
+      stroke-width: 2;
+    }
+    .reset-button:hover svg {
+      stroke: #fff;
     }
 
     #content-area {
@@ -168,6 +225,7 @@ export class PromptDjMidi extends LitElement {
       justify-content: space-around;
       padding: 2rem 1rem;
       box-sizing: border-box;
+      z-index: 1;
     }
     
     #bottom-controls {
@@ -176,6 +234,7 @@ export class PromptDjMidi extends LitElement {
       align-items: center;
       width: 100%;
       max-width: 500px;
+      margin-top: 2rem;
     }
 
     play-pause-button {
@@ -213,7 +272,7 @@ export class PromptDjMidi extends LitElement {
     
     .auto-shuffle-panel {
       position: absolute;
-      right: calc(100% + 10px);
+      left: calc(100% + 10px);
       top: 50%;
       transform: translateY(-50%);
       background: #222;
@@ -256,6 +315,11 @@ export class PromptDjMidi extends LitElement {
         flex-wrap: wrap;
         justify-content: center;
         gap: 15px;
+      }
+      #top-left-controls {
+        order: 1;
+        width: 100%;
+        justify-content: center;
       }
       #analyze-form {
         order: 2;
@@ -305,30 +369,52 @@ export class PromptDjMidi extends LitElement {
   @state() private _autoShuffleOn = false;
   @state() private _autoShufflePanelOpen = false;
   @state() private _autoShuffleInterval: number | 'random' = 'random';
-  
+
   @property({ type: Object })
   private filteredPrompts = new Set<string>();
 
+  @state() private mood: Mood = 'chill';
+  @state() private backgroundHalos: BackgroundHalo[] = [];
+  
   private _autoShuffleTimerId: number | null = null;
+  private animationFrameId: number | null = null;
+  private lastFrameTime = 0;
+  private lastMorphTime = 0;
+
+  private _analyzeMoodDebounced: () => void;
 
   constructor() {
     super();
     this.prompts = this._buildInitialPrompts();
+    this._analyzeMoodDebounced = debounce(this._analyzeMood, 1000, false);
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.lastFrameTime = performance.now();
+    this._animateHalos();
+    this._setupBackgroundHalos();
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
   }
 
   private _buildInitialPrompts() {
     const prompts = new Map<string, Prompt>();
+    const defaultActiveIndices = [0, 4, 6, 12];
     for (let i = 0; i < 16; i++) {
         const promptId = `prompt-${i}`;
         const promptData = LOFI_PROMPTS[i];
         const { text, color } = promptData;
         
-        const initialActive = i === 0 || i === 5 || i === 9;
-
         prompts.set(promptId, {
             promptId,
             text,
-            weight: initialActive ? 1 : 0,
+            weight: defaultActiveIndices.includes(i) ? 1 : 0,
             color,
         });
     }
@@ -336,80 +422,45 @@ export class PromptDjMidi extends LitElement {
   }
   
   private _randomizePrompts() {
+    const archetypes = [
+        { name: 'Minimal', beat: 1, bass: 1, harmony: 0, melody: 1, texture: 1, weightRange: [0.9, 1.2] },
+        { name: 'Jazzy', beat: 1, bass: 1, harmony: 1, melody: 2, texture: 1, weightRange: [0.8, 1.4] },
+        { name: 'Lush', beat: 1, bass: 1, harmony: 2, melody: 1, texture: 2, weightRange: [0.7, 1.3] },
+        { name: 'Ambient', beat: 1, bass: 0, harmony: 2, melody: 1, texture: 3, weightRange: [0.6, 1.1] },
+        { name: 'Complex', beat: 1, bass: 1, harmony: 1, melody: 2, texture: 2, weightRange: [0.8, 1.5] },
+    ];
+    const archetype = archetypes[Math.floor(Math.random() * archetypes.length)];
+
     const originalPrompts = [...this.prompts.values()];
+    const getPromptsByCategory = (category: string) => 
+        CATEGORY_MAPPING[category].slots.map(i => originalPrompts[i]);
+
+    const categories = {
+        beat: getPromptsByCategory('beat'),
+        bass: getPromptsByCategory('bass'),
+        harmony: getPromptsByCategory('harmony'),
+        melody: getPromptsByCategory('melody'),
+        texture: getPromptsByCategory('texture'),
+    };
+    
     const newWeights = new Map<string, number>();
 
-    const beats = originalPrompts.slice(0, 4);
-    const bass = originalPrompts.slice(4, 6);
-    const harmony = originalPrompts.slice(6, 8);
-    const melodies = originalPrompts.slice(8, 12);
-    const textures = originalPrompts.slice(12, 16);
-
-    // Helper to pick a 'count' of unique prompts from a category and assign random weights.
-    const pickAndAssign = (prompts: Prompt[], count: number, min: number, max: number) => {
-        // Filter out prompts that have already been assigned a weight, then shuffle the rest
-        const available = prompts.filter(p => !newWeights.has(p.promptId));
-        const shuffled = [...available]; // create a copy to shuffle
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        
-        // Assign weights to the requested number of prompts
+    const pickAndAssign = (categoryKey: keyof typeof categories, count: number) => {
+        const prompts = categories[categoryKey];
+        const shuffled = [...prompts].sort(() => 0.5 - Math.random());
         for (let i = 0; i < count && i < shuffled.length; i++) {
             const p = shuffled[i];
+            const [min, max] = archetype.weightRange;
             newWeights.set(p.promptId, min + Math.random() * (max - min));
         }
     };
     
-    const complexityRoll = Math.random();
+    pickAndAssign('beat', archetype.beat);
+    pickAndAssign('bass', archetype.bass);
+    pickAndAssign('harmony', archetype.harmony);
+    pickAndAssign('melody', archetype.melody);
+    pickAndAssign('texture', archetype.texture);
 
-    // All musical compositions start with a beat.
-    // The main beat should have a strong presence.
-    pickAndAssign(beats, 1, 1.0, 1.8);
-
-    // Profile: Simple and sparse (2-4 prompts)
-    if (complexityRoll < 0.3) {
-        // High chance of a foundational bassline.
-        if (Math.random() > 0.2) pickAndAssign(bass, 1, 0.9, 1.5);
-        // Low chance of a melody.
-        if (Math.random() > 0.7) pickAndAssign(melodies, 1, 0.7, 1.2);
-        // Medium chance of a light texture.
-        if (Math.random() > 0.5) pickAndAssign(textures, 1, 0.2, 0.7);
-    } 
-    // Profile: Standard, well-rounded song (4-7 prompts)
-    else if (complexityRoll < 0.85) {
-        // Guaranteed bassline to ground the track.
-        pickAndAssign(bass, 1, 0.9, 1.5);
-        
-        // Add harmonic and melodic layers.
-        pickAndAssign(harmony, 1, 0.6, 1.3);
-        if (Math.random() > 0.4) pickAndAssign(melodies, 1, 0.8, 1.4); // Main melody
-        if (Math.random() > 0.7) pickAndAssign(melodies, 1, 0.5, 0.9); // Secondary/counter-melody
-
-        // Add 1 or 2 textural elements for atmosphere.
-        const numTextures = 1 + Math.floor(Math.random() * 2);
-        pickAndAssign(textures, numTextures, 0.3, 0.9);
-    } 
-    // Profile: Complex and layered (7-10 prompts)
-    else {
-        // Layer a secondary beat/percussion loop.
-        pickAndAssign(beats, 1, 0.5, 0.9);
-        // Guaranteed strong bassline.
-        pickAndAssign(bass, 1, 1.0, 1.6);
-        
-        // Create a rich harmonic and melodic section.
-        const numHarmony = 1 + Math.floor(Math.random() * 2); // 1 or 2
-        pickAndAssign(harmony, numHarmony, 0.5, 1.2);
-        const numMelodies = 1 + Math.floor(Math.random() * 2); // 1 or 2
-        pickAndAssign(melodies, numMelodies, 0.6, 1.5);
-
-        // Fill out the soundscape with plenty of texture.
-        const numTextures = 2 + Math.floor(Math.random() * 2); // 2 or 3
-        pickAndAssign(textures, numTextures, 0.2, 1.0);
-    }
-
-    // Apply the new weights to the prompts map.
     const newPrompts = new Map<string, Prompt>();
     this.prompts.forEach((oldPrompt, promptId) => {
       newPrompts.set(promptId, {
@@ -428,7 +479,6 @@ export class PromptDjMidi extends LitElement {
 
     let intervalMs: number;
     if (this._autoShuffleInterval === 'random') {
-      // Random time between 30 and 120 seconds
       intervalMs = (30 + Math.random() * 90) * 1000;
     } else {
       intervalMs = this._autoShuffleInterval * 1000;
@@ -438,17 +488,14 @@ export class PromptDjMidi extends LitElement {
   }
 
   private _toggleAutoShufflePanel() {
-      // Toggle panel visibility
       this._autoShufflePanelOpen = !this._autoShufflePanelOpen;
 
-      // If we are closing the panel, and auto shuffle is not active, keep it closed.
-      // If auto shuffle IS active, closing the panel also turns it off.
       if (!this._autoShufflePanelOpen && this._autoShuffleOn) {
           this._autoShuffleOn = false;
       }
       
       if (!this._autoShuffleOn) {
-        if (this._autoShuffleTimerId) clearTimeout(this._autoShuffleTimerId);
+        if (this._autoShuffleTimerId) clearTimeout(this. _autoShuffleTimerId);
         this._autoShuffleTimerId = null;
       }
       this.requestUpdate();
@@ -456,7 +503,6 @@ export class PromptDjMidi extends LitElement {
 
   private _setAutoShuffleInterval(interval: number | 'random') {
     this._autoShuffleInterval = interval;
-    // Activate auto shuffle when an interval is chosen
     this._autoShuffleOn = true;
 
     if (this._autoShuffleTimerId) clearTimeout(this._autoShuffleTimerId);
@@ -466,7 +512,8 @@ export class PromptDjMidi extends LitElement {
   }
 
   private _dispatchPromptsChanged() {
-    // requestUpdate is automatically called when a @state property changes.
+    this._setupBackgroundHalos();
+    this._analyzeMoodDebounced();
     this.dispatchEvent(
       new CustomEvent('prompts-changed', { detail: this.prompts }),
     );
@@ -483,7 +530,7 @@ export class PromptDjMidi extends LitElement {
     
     this.prompts.set(promptId, prompt);
     this._dispatchPromptsChanged();
-    this.requestUpdate(); // Manually request update since we're mutating an object in the map
+    this.requestUpdate();
   }
 
   private async _handleAnalyzeSubmit(e: SubmitEvent) {
@@ -492,31 +539,45 @@ export class PromptDjMidi extends LitElement {
     await this._analyzeSong();
   }
 
-  private _clearQuery() {
+  private _resetToDefaults() {
     this.songQuery = '';
-    // Also clear the input element itself
     const input = this.shadowRoot?.querySelector('#analyze-form input') as HTMLInputElement;
     if (input) input.value = '';
+
+    this.prompts = this._buildInitialPrompts();
+    this.filteredPrompts.clear();
+
+    if (this._autoShuffleOn) {
+        this._autoShuffleOn = false;
+        if (this._autoShuffleTimerId) clearTimeout(this._autoShuffleTimerId);
+        this._autoShuffleTimerId = null;
+    }
+    this._autoShufflePanelOpen = false;
+    
+    this._dispatchPromptsChanged();
+    this.requestUpdate();
+  }
+
+  private _getSeed(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash |= 0;
+    }
+    return hash;
   }
 
   private async _analyzeSong() {
     this.isAnalyzing = true;
     try {
-      const systemInstruction = `You are a sonic analyst and expert music producer, specializing in deconstructing popular songs into their core instrumental components for a generative AI. Your goal is to capture the unique vibe and background instrumentation of a given song, so the AI can recreate a similar feel. You must be specific and attentive to genre nuances, especially for styles like Punjabi pop, Afrobeats, and Lo-fi.
-
-For the song provided, generate a JSON array of EXACTLY 16 musical prompts.
-
-Follow these rules precisely:
-1.  **Core Mission**: Your prompts should meticulously describe the background music and instrumental elements. Capture the song's unique sonic identity, not just a generic genre template.
-2.  **Be Specific & Evocative**: Use descriptive adjectives. Instead of "Guitar", say "Reverb-drenched clean guitar". Instead of "Beat", say "Driving trap beat with fast hi-hats".
-3.  **Strict Structure**: You MUST return exactly 16 prompts distributed into these five categories with the specified counts:
-    - 4 'beat' prompts: Describe the specific rhythmic patterns, drum machine sounds, or percussion style (e.g., 'Lofi Boom-Bap Drums', 'Syncopated Afrobeats Percussion', 'Minimalist Trap Hi-Hats').
-    - 2 'bass' prompts: Describe the bass texture and melody (e.g., 'Deep Sub Bass Rumble', 'Funky Slap Bass Riff').
-    - 2 'harmony' prompts: Describe the chordal and pad-like instruments (e.g., 'Washed-out Wurlitzer Chords', 'Mournful String Pad').
-    - 4 'melody' prompts: Focus on instrumental hooks, counter-melodies, or significant non-vocal melodic phrases (e.g., 'Sad Flute Melody', 'Catchy Plucked Synth Riff', 'Sampled Vocal Chop').
-    - 4 'texture' prompts: Describe the atmospheric and FX layers that create the song's mood (e.g., 'Gentle Rain Soundscape', 'Vinyl Crackle and Hiss', 'Echoing Ad-Lib FX').
-4.  **No Silence or Generic Prompts**: Every prompt must be a creative, musical idea derived from the song. Do not use "silence" or overly simple prompts like "Drums".
-5.  **Analyze Intelligently**: Listen carefully to the song provided. If only a title or vibe is given, infer the sonic characteristics based on the genre and artist's typical style. For example, for "pal pal by talwiinder", you should identify lo-fi, trap, and melancholic elements. For "wacuka", you should listen for Afrobeats rhythms.`;
+      const systemInstruction = `You are a world-class audio engineer. Your task is to analyze a user's song request and generate 16 prompts for a generative music AI to perfectly recreate the original song. Be hyper-specific and technical. Capture the unique soul of the song. Your goal is replication, not creative interpretation.
+      **PROTOCOL:**
+      1.  **IDENTIFY**: BPM, key, genre, mood.
+      2.  **MAP INSTRUMENTS**: Create a hyper-specific, descriptive prompt for every sound.
+          - *Good*: 'Punchy 92 BPM boom-bap drum loop with a vinyl crackle layer'
+          - *Bad*: 'Drums'
+      3.  **STRUCTURED OUTPUT**: Provide exactly 16 prompts categorized as: 4 'beat', 2 'bass', 2 'harmony', 4 'melody', 4 'texture'. Fill all slots. If the original has vocals, one melody prompt MUST recreate a key line.`;
       
       const schema = {
         type: Type.ARRAY,
@@ -525,7 +586,7 @@ Follow these rules precisely:
           properties: {
             text: {
               type: Type.STRING,
-              description: "A short, descriptive prompt for a musical element (e.g., 'Heavy 808 Bassline', 'Plucked Koto Riff'). Must be 2-4 words."
+              description: "A short, descriptive prompt for a musical element (e.g., 'Heavy 808 Bassline', 'Plucked Koto Riff'). Must be 2-5 words."
             },
             category: {
               type: Type.STRING,
@@ -538,11 +599,12 @@ Follow these rules precisely:
 
       const response = await this.generativeAi.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: `Analyze the song: "${this.songQuery}"`,
+        contents: `Analyze the song or vibe: "${this.songQuery}"`,
         config: {
           systemInstruction,
           responseMimeType: 'application/json',
           responseSchema: schema,
+          seed: this._getSeed(this.songQuery),
         },
       });
 
@@ -573,43 +635,141 @@ Follow these rules precisely:
     }
     
     const newPrompts = new Map<string, Prompt>();
-    for (let i = 0; i < 16; i++) {
-      const promptId = `prompt-${i}`;
-      
-      const categoryName = Object.keys(CATEGORY_MAPPING).find(key => CATEGORY_MAPPING[key].slots.includes(i))!;
-      const categoryInfo = CATEGORY_MAPPING[categoryName];
-      
-      const newText = categorizedPrompts[categoryName]?.shift()?.text || defaultPrompts.get(promptId)!.text;
+    const activeIdsToSet: string[] = [];
 
-      newPrompts.set(promptId, {
-        promptId,
-        text: newText,
-        weight: 0,
-        color: categoryInfo.color,
-      });
+    for (const categoryName of Object.keys(CATEGORY_MAPPING)) {
+        const categoryInfo = CATEGORY_MAPPING[categoryName];
+        let isFirstInCategory = true;
+        for(const slotIndex of categoryInfo.slots) {
+            const promptId = `prompt-${slotIndex}`;
+            const newText = categorizedPrompts[categoryName]?.shift()?.text || defaultPrompts.get(promptId)!.text;
+            
+            const color = categoryInfo.color;
+
+            newPrompts.set(promptId, {
+                promptId,
+                text: newText,
+                weight: 0,
+                color,
+            });
+
+            if (isFirstInCategory && ['beat', 'bass', 'harmony', 'melody'].includes(categoryName)) {
+                activeIdsToSet.push(promptId);
+                isFirstInCategory = false;
+            }
+        }
     }
+
+    activeIdsToSet.forEach(id => {
+      const prompt = newPrompts.get(id);
+      if (prompt) prompt.weight = 1.0;
+    });
 
     this.prompts = newPrompts;
     this.filteredPrompts.clear();
     this._dispatchPromptsChanged();
   }
+  
+  private async _analyzeMood() {
+    const activePrompts = [...this.prompts.values()]
+        .filter(p => p.weight > 0)
+        .map(p => p.text)
+        .join(', ');
 
-  private readonly makeBackground = throttle(() => {
-    const clamp01 = (v: number) => Math.min(Math.max(v, 0), 1);
-    const MAX_WEIGHT = 0.5;
-    const MAX_ALPHA = 0.6;
-    const bg: string[] = [];
-    [...this.prompts.values()].forEach((p, i) => {
-      const alphaPct = clamp01(p.weight / MAX_WEIGHT) * MAX_ALPHA;
-      const alpha = Math.round(alphaPct * 0xff).toString(16).padStart(2, '0');
-      const stop = p.weight / 2;
-      const x = (i % 4) / 3;
-      const y = Math.floor(i / 4) / 3;
-      const s = `radial-gradient(circle at ${x * 100}% ${y * 100}%, ${p.color}${alpha} 0px, ${p.color}00 ${stop * 100}%)`;
-      bg.push(s);
+    if (!activePrompts) {
+      this.mood = 'chill';
+      return;
+    }
+
+    try {
+      const response = await this.generativeAi.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Analyze the following musical elements and describe the overall mood in one word from this list: happy, sad, intense, ambient, chill. Elements: "${activePrompts}"`,
+      });
+      let newMood = response.text.trim().toLowerCase() as Mood;
+      if (!Object.keys(MOOD_PALETTES).includes(newMood)) {
+        newMood = 'chill'; // Fallback to default
+      }
+      this.mood = newMood;
+    } catch (e) {
+      console.error('Mood analysis failed:', e);
+      this.mood = 'chill'; // Fallback on error
+    }
+  }
+
+  private _generateBlobShape(): string {
+    const p = () => `${25 + Math.random() * 50}%`;
+    return `${p()} ${p()} ${p()} ${p()} / ${p()} ${p()} ${p()} ${p()}`;
+  }
+
+  private _setupBackgroundHalos() {
+    const activePrompts = [...this.prompts.values()].filter(p => p.weight > 0);
+    const moodColors = MOOD_PALETTES[this.mood].colors;
+
+    // Remove halos that are no longer active
+    const activeIds = new Set(activePrompts.map(p => p.promptId));
+    this.backgroundHalos = this.backgroundHalos.filter(h => activeIds.has(h.id));
+
+    activePrompts.forEach((p, i) => {
+      const existing = this.backgroundHalos.find(h => h.id === p.promptId);
+      const size = 300 + p.weight * 300;
+      let color = p.color;
+      if (moodColors.length > 0) {
+        color = moodColors[i % moodColors.length];
+      }
+
+      if (existing) {
+        existing.baseSize = size;
+        existing.color = color;
+      } else {
+        this.backgroundHalos.push({
+          id: p.promptId,
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          vx: (Math.random() - 0.5) * 10,
+          vy: (Math.random() - 0.5) * 10,
+          baseSize: size,
+          color: color,
+          borderRadius: this._generateBlobShape(),
+        });
+      }
     });
-    return bg.join(', ');
-  }, 30);
+  }
+
+  private _animateHalos = () => {
+    const now = performance.now();
+    const delta = (now - this.lastFrameTime) / 1000; // seconds
+    
+    // Morph blobs every few seconds
+    if (now - this.lastMorphTime > 4000) {
+      this.backgroundHalos.forEach(halo => {
+        halo.borderRadius = this._generateBlobShape();
+      });
+      this.lastMorphTime = now;
+    }
+    
+    const container = this.shadowRoot?.querySelector('#halo-container');
+    if (container) {
+      const { width, height } = container.getBoundingClientRect();
+      this.backgroundHalos.forEach(halo => {
+        halo.x += halo.vx * delta;
+        halo.y += halo.vy * delta;
+
+        // Bounce off walls
+        const radius = halo.baseSize / 2;
+        if (halo.x - radius < 0 || halo.x + radius > width) halo.vx *= -1;
+        if (halo.y - radius < 0 || halo.y + radius > height) halo.vy *= -1;
+
+        // Clamp position to be safe
+        halo.x = Math.max(radius, Math.min(width - radius, halo.x));
+        halo.y = Math.max(radius, Math.min(height - radius, halo.y));
+      });
+    }
+
+    this.lastFrameTime = now;
+    this.requestUpdate(); // Request a full re-render to update halo positions and shapes
+    this.animationFrameId = requestAnimationFrame(this._animateHalos);
+  }
 
   private playPause() {
     this.dispatchEvent(new CustomEvent('play-pause'));
@@ -620,17 +780,50 @@ Follow these rules precisely:
   }
 
   override render() {
-    const bg = styleMap({ backgroundImage: this.makeBackground() });
+    const hostStyles = styleMap({ '--bg-color': MOOD_PALETTES[this.mood].bg });
     
     return html`
       ${this.renderSvgDefs()}
-      <main id="main-content">
-        <div id="background" style=${bg}></div>
+      <div id="halo-container">
+        ${this.backgroundHalos.map(halo => {
+          const haloStyle = styleMap({
+            width: `${halo.baseSize}px`,
+            height: `${halo.baseSize}px`,
+            backgroundColor: halo.color,
+            transform: `translate(${halo.x - halo.baseSize/2}px, ${halo.y - halo.baseSize/2}px)`,
+            borderRadius: halo.borderRadius,
+          });
+          return html`<div class="background-halo" style=${haloStyle}></div>`;
+        })}
+      </div>
+
+      <main id="main-content" style=${hostStyles}>
         <div id="top-bar">
+          <div id="top-left-controls">
+            <div class="auto-shuffle">
+                <button 
+                    class="auto-shuffle-toggle ${classMap({active: this._autoShuffleOn})}"
+                    @click=${this._toggleAutoShufflePanel}
+                    aria-label="Toggle Auto Shuffle"
+                    >Auto Shuffler</button>
+                ${this._autoShufflePanelOpen ? html`
+                    <div class="auto-shuffle-panel">
+                        ${(['random', 30, 60, 90, 120] as const).map(val => html`
+                          <button 
+                            class=${classMap({ active: this._autoShuffleInterval === val && this._autoShuffleOn })}
+                            @click=${() => this._setAutoShuffleInterval(val)}>
+                            ${val === 'random' ? 'Random' : `${val}s`}
+                          </button>
+                        `)}
+                    </div>
+                ` : ''}
+            </div>
+          </div>
+
           <form id="analyze-form" @submit=${this._handleAnalyzeSubmit}>
             <input 
               type="text" 
-              placeholder="Describe a vibe or genre..."
+              placeholder="Recreate a song or vibe..."
               .value=${this.songQuery}
               @input=${(e: Event) => this.songQuery = (e.target as HTMLInputElement).value}
               ?disabled=${this.isAnalyzing}
@@ -638,28 +831,10 @@ Follow these rules precisely:
             <button class="top-button analyze-button" type="submit" ?disabled=${this.isAnalyzing || !this.songQuery} aria-label="Analyze song">
                 ${this.renderSparkIcon()}
             </button>
-            <button class="top-button clear-button" type="button" @click=${this._clearQuery} ?hidden=${!this.songQuery} aria-label="Clear search">
-              ${this.renderClearIcon()}
+            <button class="top-button reset-button" type="button" @click=${this._resetToDefaults} ?hidden=${!this.songQuery} aria-label="Reset to defaults">
+              ${this.renderResetIcon()}
             </button>
           </form>
-          <div class="auto-shuffle">
-              <button 
-                  class="auto-shuffle-toggle ${classMap({active: this._autoShuffleOn})}"
-                  @click=${this._toggleAutoShufflePanel}
-                  aria-label="Toggle Auto Shuffle"
-                  >Auto Shuffler</button>
-              ${this._autoShufflePanelOpen ? html`
-                  <div class="auto-shuffle-panel">
-                      ${(['random', 30, 60, 90, 120] as const).map(val => html`
-                        <button 
-                          class=${classMap({ active: this._autoShuffleInterval === val && this._autoShuffleOn })}
-                          @click=${() => this._setAutoShuffleInterval(val)}>
-                          ${val === 'random' ? 'Random' : `${val}s`}
-                        </button>
-                      `)}
-                  </div>
-              ` : ''}
-          </div>
         </div>
 
         <div id="content-area">
@@ -721,14 +896,15 @@ Follow these rules precisely:
     `;
   }
 
-  private renderClearIcon() {
+  private renderResetIcon() {
     return svg`
-      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
+      <svg viewBox="0 0 24 24">
+        <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/>
+        <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>
       </svg>
     `;
   }
+
 }
 
 declare global {

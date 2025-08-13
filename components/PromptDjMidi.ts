@@ -101,7 +101,7 @@ export class PromptDjMidi extends LitElement {
     }
     .background-halo {
       position: absolute;
-      filter: blur(80px);
+      filter: blur(120px);
       will-change: transform, border-radius;
       transition:
         transform 200ms linear,
@@ -712,7 +712,7 @@ export class PromptDjMidi extends LitElement {
 
     activePrompts.forEach((p, i) => {
       const existing = this.backgroundHalos.find(h => h.id === p.promptId);
-      const size = 300 + p.weight * 300;
+      const size = 400 + p.weight * 400;
       let color = p.color;
       if (moodColors.length > 0) {
         color = moodColors[i % moodColors.length];
@@ -726,8 +726,8 @@ export class PromptDjMidi extends LitElement {
           id: p.promptId,
           x: Math.random() * window.innerWidth,
           y: Math.random() * window.innerHeight,
-          vx: (Math.random() - 0.5) * 10,
-          vy: (Math.random() - 0.5) * 10,
+          vx: (Math.random() - 0.5) * 30,
+          vy: (Math.random() - 0.5) * 30,
           baseSize: size,
           color: color,
           borderRadius: this._generateBlobShape(),
@@ -755,14 +755,14 @@ export class PromptDjMidi extends LitElement {
         halo.x += halo.vx * delta;
         halo.y += halo.vy * delta;
 
-        // Bounce off walls
+        // Wrap around screen edges instead of bouncing to ensure even distribution
         const radius = halo.baseSize / 2;
-        if (halo.x - radius < 0 || halo.x + radius > width) halo.vx *= -1;
-        if (halo.y - radius < 0 || halo.y + radius > height) halo.vy *= -1;
-
-        // Clamp position to be safe
-        halo.x = Math.max(radius, Math.min(width - radius, halo.x));
-        halo.y = Math.max(radius, Math.min(height - radius, halo.y));
+        if (width > 0 && height > 0) { // Ensure we have dimensions before wrapping
+            if (halo.x + radius < 0) halo.x = width + radius;
+            if (halo.x - radius > width) halo.x = -radius;
+            if (halo.y + radius < 0) halo.y = height + radius;
+            if (halo.y - radius > height) halo.y = -radius;
+        }
       });
     }
 

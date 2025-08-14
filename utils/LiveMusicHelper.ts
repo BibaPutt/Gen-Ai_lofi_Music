@@ -115,6 +115,12 @@ export class LiveMusicHelper extends EventTarget {
   public readonly setWeightedPrompts = throttle(async (prompts: Map<string, Prompt>) => {
     this.prompts = prompts;
 
+    // Don't send updates to the server if not playing.
+    // The `play` method will send the latest prompts upon resuming.
+    if (this.playbackState === 'paused' || this.playbackState === 'stopped') {
+      return;
+    }
+
     if (this.activePrompts.length === 0) {
       this.dispatchEvent(new CustomEvent('error', { detail: 'There needs to be one active prompt to play.' }));
       this.pause();
@@ -177,4 +183,5 @@ export class LiveMusicHelper extends EventTarget {
         return this.stop();
     }
   }
+
 }

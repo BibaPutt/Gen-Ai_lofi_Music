@@ -46,22 +46,20 @@ const CATEGORY_MAPPING: Record<string, { color: string, slots: number[] }> = {
     texture: { color: '#BFC9CA', slots: [12, 13, 14, 15] },
 };
 
-type Mood = 'chill' | 'happy' | 'sad' | 'intense' | 'ambient';
-
-const MOOD_PALETTES: Record<Mood, { bg: string, colors: string[] }> = {
-  chill: { bg: '#111111', colors: ['#4A90E2', '#50E3C2', '#B8E986', '#7DD3FC'] },
-  happy: { bg: '#332211', colors: ['#FFC300', '#FF5733', '#FF8E53', '#F9A825', '#FFEB3B'] },
-  sad: { bg: '#1A1D2D', colors: ['#3B4A6B', '#5C6E91', '#2F3B52', '#485675', '#607D8B'] },
-  intense: { bg: '#2C0B0B', colors: ['#8E1A1A', '#FF4D4D', '#D90000', '#B71C1C', '#F50057'] },
-  ambient: { bg: '#2E3D40', colors: ['#A8DADC', '#C5E1A5', '#E0F7FA', '#B2DFDB', '#80CBC4'] },
-};
+const CHILL_BG_COLOR = '#111111';
+const CHILL_HALO_COLORS = ['#4A90E2', '#50E3C2', '#B8E986', '#7DD3FC'];
 
 interface BackgroundHalo {
   id: string;
   x: number;
   y: number;
-  vx: number;
-  vy: number;
+  angle: number;
+  angularVelocity: number;
+  orbitRadius: number;
+  centerX: number;
+  centerY: number;
+  centerVx: number;
+  centerVy: number;
   baseSize: number;
   color: string;
   borderRadius: string;
@@ -373,7 +371,6 @@ export class PromptDjMidi extends LitElement {
   @property({ type: Object })
   private filteredPrompts = new Set<string>();
 
-  @state() private mood: Mood = 'chill';
   @state() private backgroundHalos: BackgroundHalo[] = [];
   
   private _autoShuffleTimerId: number | null = null;
@@ -381,19 +378,16 @@ export class PromptDjMidi extends LitElement {
   private lastFrameTime = 0;
   private lastMorphTime = 0;
 
-  private _analyzeMoodDebounced: () => void;
-
   constructor() {
     super();
     this.prompts = this._buildInitialPrompts();
-    this._analyzeMoodDebounced = debounce(this._analyzeMood, 1000, false);
   }
 
   override connectedCallback(): void {
     super.connectedCallback();
     this.lastFrameTime = performance.now();
-    this._animateHalos();
     this._setupBackgroundHalos();
+    this._animateHalos();
   }
 
   override disconnectedCallback(): void {
@@ -513,7 +507,6 @@ export class PromptDjMidi extends LitElement {
 
   private _dispatchPromptsChanged() {
     this._setupBackgroundHalos();
-    this._analyzeMoodDebounced();
     this.dispatchEvent(
       new CustomEvent('prompts-changed', { detail: this.prompts }),
     );
@@ -599,7 +592,7 @@ export class PromptDjMidi extends LitElement {
 
       const response = await this.generativeAi.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: `Describe a vibe or mood "${this.songQuery}"`,
+        contents: `Analyze the song or vibe: "${this.songQuery}"`,
         config: {
           systemInstruction,
           responseMimeType: 'application/json',
@@ -670,33 +663,6 @@ export class PromptDjMidi extends LitElement {
     this._dispatchPromptsChanged();
   }
   
-  private async _analyzeMood() {
-    const activePrompts = [...this.prompts.values()]
-        .filter(p => p.weight > 0)
-        .map(p => p.text)
-        .join(', ');
-
-    if (!activePrompts) {
-      this.mood = 'chill';
-      return;
-    }
-
-    try {
-      const response = await this.generativeAi.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Analyze the following musical elements and describe the overall mood in one word from this list: happy, sad, intense, ambient, chill. Elements: "${activePrompts}"`,
-      });
-      let newMood = response.text.trim().toLowerCase() as Mood;
-      if (!Object.keys(MOOD_PALETTES).includes(newMood)) {
-        newMood = 'chill'; // Fallback to default
-      }
-      this.mood = newMood;
-    } catch (e) {
-      console.error('Mood analysis failed:', e);
-      this.mood = 'chill'; // Fallback on error
-    }
-  }
-
   private _generateBlobShape(): string {
     const p = () => `${25 + Math.random() * 50}%`;
     return `${p()} ${p()} ${p()} ${p()} / ${p()} ${p()} ${p()} ${p()}`;
@@ -704,9 +670,8 @@ export class PromptDjMidi extends LitElement {
 
   private _setupBackgroundHalos() {
     const activePrompts = [...this.prompts.values()].filter(p => p.weight > 0);
-    const moodColors = MOOD_PALETTES[this.mood].colors;
+    const moodColors = CHILL_HALO_COLORS;
 
-    // Remove halos that are no longer active
     const activeIds = new Set(activePrompts.map(p => p.promptId));
     this.backgroundHalos = this.backgroundHalos.filter(h => activeIds.has(h.id));
 
@@ -726,8 +691,13 @@ export class PromptDjMidi extends LitElement {
           id: p.promptId,
           x: Math.random() * window.innerWidth,
           y: Math.random() * window.innerHeight,
-          vx: (Math.random() - 0.5) * 30,
-          vy: (Math.random() - 0.5) * 30,
+          angle: Math.random() * 2 * Math.PI,
+          angularVelocity: (Math.random() - 0.5) * 0.4,
+          orbitRadius: 100 + Math.random() * 100,
+          centerX: Math.random() * window.innerWidth,
+          centerY: Math.random() * window.innerHeight,
+          centerVx: (Math.random() - 0.5) * 20,
+          centerVy: (Math.random() - 0.5) * 20,
           baseSize: size,
           color: color,
           borderRadius: this._generateBlobShape(),
@@ -740,7 +710,6 @@ export class PromptDjMidi extends LitElement {
     const now = performance.now();
     const delta = (now - this.lastFrameTime) / 1000; // seconds
     
-    // Morph blobs every few seconds
     if (now - this.lastMorphTime > 4000) {
       this.backgroundHalos.forEach(halo => {
         halo.borderRadius = this._generateBlobShape();
@@ -748,26 +717,38 @@ export class PromptDjMidi extends LitElement {
       this.lastMorphTime = now;
     }
     
+    const speedMultiplier = this.playbackState === 'playing' ? 1.0 : 0.2;
+
     const container = this.shadowRoot?.querySelector('#halo-container');
     if (container) {
       const { width, height } = container.getBoundingClientRect();
-      this.backgroundHalos.forEach(halo => {
-        halo.x += halo.vx * delta;
-        halo.y += halo.vy * delta;
+      if (width > 0 && height > 0) {
+        this.backgroundHalos.forEach(halo => {
+          halo.centerX += halo.centerVx * delta * speedMultiplier;
+          halo.centerY += halo.centerVy * delta * speedMultiplier;
 
-        // Wrap around screen edges instead of bouncing to ensure even distribution
-        const radius = halo.baseSize / 2;
-        if (width > 0 && height > 0) { // Ensure we have dimensions before wrapping
-            if (halo.x + radius < 0) halo.x = width + radius;
-            if (halo.x - radius > width) halo.x = -radius;
-            if (halo.y + radius < 0) halo.y = height + radius;
-            if (halo.y - radius > height) halo.y = -radius;
-        }
-      });
+          const wrapMargin = halo.orbitRadius + halo.baseSize / 2;
+          if (halo.centerVx > 0 && halo.centerX - wrapMargin > width) {
+            halo.centerX = -wrapMargin;
+          } else if (halo.centerVx < 0 && halo.centerX + wrapMargin < 0) {
+            halo.centerX = width + wrapMargin;
+          }
+          if (halo.centerVy > 0 && halo.centerY - wrapMargin > height) {
+            halo.centerY = -wrapMargin;
+          } else if (halo.centerVy < 0 && halo.centerY + wrapMargin < 0) {
+            halo.centerY = height + wrapMargin;
+          }
+          
+          halo.angle += halo.angularVelocity * delta;
+          
+          halo.x = halo.centerX + Math.cos(halo.angle) * halo.orbitRadius;
+          halo.y = halo.centerY + Math.sin(halo.angle) * halo.orbitRadius;
+        });
+      }
     }
 
     this.lastFrameTime = now;
-    this.requestUpdate(); // Request a full re-render to update halo positions and shapes
+    this.requestUpdate();
     this.animationFrameId = requestAnimationFrame(this._animateHalos);
   }
 
@@ -780,7 +761,7 @@ export class PromptDjMidi extends LitElement {
   }
 
   override render() {
-    const hostStyles = styleMap({ '--bg-color': MOOD_PALETTES[this.mood].bg });
+    const hostStyles = styleMap({ '--bg-color': CHILL_BG_COLOR });
     
     return html`
       ${this.renderSvgDefs()}
